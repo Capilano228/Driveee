@@ -79,17 +79,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($action === 'complete') {
         $order = $db->getOrder($orderId);
         if ($order && $order['status'] == 'passenger_onboard') {
-            // Обновляем статус заказа
             $db->updateOrderStatus($orderId, 'completed');
-            
-            // Начисляем бонусы водителю (всегда)
             $db->addLoyaltyPoints($order['driver_id'], 10, $orderId, 'ride_complete');
-            
-            // Начисляем бонусы пассажиру (огонек и квесты)
             $db->updateStreak($order['passenger_id'], true);
+            // НАЧИСЛЯЕМ ПРИОРИТЕТНЫЕ ПОЕЗДКИ ЗА КВЕСТЫ
             $db->updateQuestProgress($order['passenger_id']);
-            
-            echo json_encode(['success' => true, 'message' => 'Поездка завершена!']);
+            echo json_encode(['success' => true, 'message' => 'Поездка завершена! +приоритет за квесты']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Сначала отметьте что сели в такси']);
         }

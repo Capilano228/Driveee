@@ -52,8 +52,7 @@ $yakutiaAddresses = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>DRIVEEE - Такси Якутии</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://mapgl.2gis.com/api/js/v1"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
@@ -114,7 +113,6 @@ $yakutiaAddresses = [
         .order-card { background: white; border-radius: 20px; padding: 14px; margin-bottom: 10px; border: 1px solid #eee; }
         .order-card.priority { background: linear-gradient(135deg, #fff, #e8fff0); border-left: 4px solid #ff6600; }
         .priority-tag { background: #ff6600; color: white; padding: 2px 10px; border-radius: 20px; font-size: 11px; margin-left: 8px; }
-        .driver-name-link { color: #1a1a1a; text-decoration: none; font-weight: 600; cursor: pointer; }
         .accept-btn { width: 100%; padding: 10px; background: #00cc44; border: none; border-radius: 30px; font-weight: 600; margin-top: 10px; cursor: pointer; }
         .action-btns { display: flex; gap: 10px; margin-top: 10px; }
         .action-btn { flex: 1; padding: 10px; border: none; border-radius: 30px; font-weight: 500; cursor: pointer; }
@@ -200,7 +198,7 @@ $yakutiaAddresses = [
                             <div class="quest-desc"><?php echo htmlspecialchars($quest['description']); ?></div>
                             <div class="quest-progress"><div class="quest-progress-fill" style="width: <?php echo min(100, ($quest['progress'] / $quest['requirement_value']) * 100); ?>%"></div></div>
                         </div>
-                        <div class="quest-reward">+<?php echo $quest['reward_points']; ?></div>
+                        <div class="quest-reward">+<?php echo $quest['reward_points']; ?> приор.</div>
                     </div>
                     <?php endforeach; ?>
                 <?php else: ?>
@@ -298,47 +296,76 @@ function showDriverProfile(driverId) {
         });
 }
 
-// КАРТЫ
+// 2GIS КАРТА ПАССАЖИРА
 function initMap() {
-    map = L.map('map').setView([62.027, 129.732], 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OSM' }).addTo(map);
-    if(navigator.geolocation) {
+    map = new mapgl.Map('map', {
+        center: [62.027, 129.732],
+        zoom: 14,
+        key: '5ee9d56d-f2f8-4b77-8433-c260e7b1601a' // демо-режим 2GIS
+    });
+    
+    if (navigator.geolocation) {
         navigator.geolocation.watchPosition(function(pos) {
-            if(userMarker) map.removeLayer(userMarker);
-            userMarker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map);
-            map.setView([pos.coords.latitude, pos.coords.longitude], 14);
+            if (userMarker) userMarker.destroy();
+            userMarker = new mapgl.Marker(map, {
+                coordinates: [pos.coords.latitude, pos.coords.longitude],
+                icon: '📍'
+            });
+            map.setCenter([pos.coords.latitude, pos.coords.longitude]);
         }, null, { enableHighAccuracy: true });
     }
 }
 
+// 2GIS КАРТА ВОДИТЕЛЯ
 function initDriverMap() {
     var driverMapDiv = document.getElementById('driverMap');
-    if(driverMapDiv) {
-        driverMap = L.map('driverMap').setView([62.027, 129.732], 12);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OSM' }).addTo(driverMap);
-        if(navigator.geolocation) {
+    if (driverMapDiv) {
+        driverMap = new mapgl.Map('driverMap', {
+            center: [62.027, 129.732],
+            zoom: 14,
+            key: 'demo'
+        });
+        
+        if (navigator.geolocation) {
             navigator.geolocation.watchPosition(function(pos) {
-                if(driverLocationMarker) driverMap.removeLayer(driverLocationMarker);
-                driverLocationMarker = L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(driverMap);
-                driverMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
+                if (driverLocationMarker) driverLocationMarker.destroy();
+                driverLocationMarker = new mapgl.Marker(driverMap, {
+                    coordinates: [pos.coords.latitude, pos.coords.longitude],
+                    icon: '🚗'
+                });
+                driverMap.setCenter([pos.coords.latitude, pos.coords.longitude]);
             }, null, { enableHighAccuracy: true });
         }
     }
 }
 
 function findMyLocation() {
-    if(navigator.geolocation) navigator.geolocation.getCurrentPosition(function(p) { map.setView([p.coords.latitude, p.coords.longitude], 14); });
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(p) {
+            map.setCenter([p.coords.latitude, p.coords.longitude]);
+        });
+    }
 }
+
 function findDriverLocation() {
-    if(navigator.geolocation && driverMap) navigator.geolocation.getCurrentPosition(function(p) { driverMap.setView([p.coords.latitude, p.coords.longitude], 14); });
+    if (navigator.geolocation && driverMap) {
+        navigator.geolocation.getCurrentPosition(function(p) {
+            driverMap.setCenter([p.coords.latitude, p.coords.longitude]);
+        });
+    }
 }
 
 // ПОДСКАЗКИ АДРЕСОВ
 function showAddressSuggestions(inputId, query) {
     var div = document.getElementById(inputId + 'Suggestions');
     if(!query || query.length < 2) { div.style.display = 'none'; return; }
-    var filtered = yakutiaAddresses.filter(function(addr) { return addr.toLowerCase().indexOf(query.toLowerCase()) !== -1; });
+    
+    var filtered = yakutiaAddresses.filter(function(addr) {
+        return addr.toLowerCase().indexOf(query.toLowerCase()) !== -1;
+    });
+    
     if(filtered.length === 0) { div.style.display = 'none'; return; }
+    
     div.innerHTML = '';
     for(var i = 0; i < filtered.length; i++) {
         (function(address) {
@@ -441,7 +468,7 @@ function checkOrder() {
         });
 }
 
-// Выхожу (пассажир)
+// Выхожу
 document.getElementById('exitBtn').onclick = function() {
     fetch('/api/orders.php', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'exit', order_id:currentOrderId}) })
         .then(function(r) { return r.json(); }).then(function(data){
@@ -454,7 +481,7 @@ document.getElementById('exitBtn').onclick = function() {
         });
 };
 
-// Сел в такси (пассажир)
+// Сел в такси
 document.getElementById('boardBtn').onclick = function() {
     fetch('/api/orders.php', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'passenger_onboard', order_id:currentOrderId}) })
         .then(function(r) { return r.json(); }).then(function(data){
