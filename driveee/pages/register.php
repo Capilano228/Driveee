@@ -1,10 +1,8 @@
 <?php
 require_once '../includes/config.php';
 require_once '../includes/database.php';
-require_once '../includes/auth.php';
 
 $db = new Database();
-$auth = new Auth();
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -26,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = $userId;
             $_SESSION['user_type'] = $userType;
             $_SESSION['user_name'] = $fullName;
-            $_SESSION['user_phone'] = $phone;
             header('Location: ' . SITE_URL . '/index.php');
             exit;
         } else {
@@ -34,141 +31,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-
-if ($auth->isLoggedIn()) {
-    header('Location: ' . SITE_URL . '/index.php');
-    exit;
-}
 ?>
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Регистрация - DRIVEEE</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: #1a1a1a;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .phone {
-            width: 380px;
-            height: 700px;
-            background: #fff;
-            border-radius: 44px;
-            overflow-y: auto;
-            box-shadow: 0 30px 50px rgba(0,0,0,0.3);
-        }
-        .dynamic-island {
-            background: #1a1a1a;
-            height: 50px;
-            border-radius: 0 0 30px 30px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding-top: 10px;
-        }
-        .time { color: white; font-size: 14px; }
-        .auth-header {
-            background: #1a1a1a;
-            padding: 20px;
-            text-align: center;
-        }
-        .auth-header h1 { color: #00cc44; font-size: 28px; }
-        .auth-content { padding: 30px 20px; }
-        .error {
-            background: #ffebee;
-            color: #ff4444;
-            padding: 12px;
-            border-radius: 16px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .input-group {
-            margin-bottom: 16px;
-        }
-        .input-group input, .input-group select {
-            width: 100%;
-            padding: 16px;
-            border: 1px solid #e0e0e0;
-            border-radius: 30px;
-            font-size: 16px;
-            background: #f5f5f5;
-        }
-        .register-btn {
-            width: 100%;
-            padding: 16px;
-            background: #00cc44;
-            border: none;
-            border-radius: 30px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        .login-link {
-            text-align: center;
-            margin-top: 20px;
-            color: #666;
-        }
-        .login-link a {
-            color: #00cc44;
-            text-decoration: none;
-            font-weight: 600;
-        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:#1a1a1a;font-family:Arial;display:flex;justify-content:center;align-items:center;min-height:100vh}
+        .phone{width:380px;height:700px;background:#fff;border-radius:44px;overflow:auto}
+        .header{background:#1a1a1a;padding:20px;text-align:center}
+        .header h1{color:#00cc44;font-size:28px}
+        .content{padding:30px 20px}
+        .error{background:#ffebee;color:#ff4444;padding:12px;border-radius:16px;margin-bottom:20px}
+        input,select{width:100%;padding:16px;border:1px solid #ddd;border-radius:30px;margin-bottom:16px;font-size:16px}
+        button{width:100%;padding:16px;background:#00cc44;border:none;border-radius:30px;font-size:16px;font-weight:bold;cursor:pointer}
+        .link{text-align:center;margin-top:20px}
+        .link a{color:#00cc44;text-decoration:none}
     </style>
 </head>
 <body>
 <div class="phone">
-    <div class="dynamic-island">
-        <span class="time" id="currentTime">9:41</span>
-    </div>
-    <div class="auth-header">
-        <h1>DRIVEEE</h1>
-    </div>
-    <div class="auth-content">
-        <?php if ($error): ?>
-            <div class="error"><?php echo htmlspecialchars($error); ?></div>
-        <?php endif; ?>
+    <div class="header"><h1>DRIVEEE</h1></div>
+    <div class="content">
+        <?php if($error):?><div class="error"><?=$error?></div><?php endif;?>
         <form method="POST">
-            <div class="input-group">
-                <input type="tel" name="phone" placeholder="+7 (___) ___-__-__" required>
-            </div>
-            <div class="input-group">
-                <input type="password" name="password" placeholder="Пароль (мин. 6 символов)" required>
-            </div>
-            <div class="input-group">
-                <input type="text" name="full_name" placeholder="Полное имя" required>
-            </div>
-            <div class="input-group">
-                <select name="user_type">
-                    <option value="passenger">Пассажир</option>
-                    <option value="driver">Водитель</option>
-                </select>
-            </div>
-            <button type="submit" class="register-btn">Зарегистрироваться</button>
+            <input type="tel" name="phone" placeholder="+7 (___) ___-__-__" required>
+            <input type="password" name="password" placeholder="Пароль (мин. 6 символов)" required>
+            <input type="text" name="full_name" placeholder="Полное имя" required>
+            <select name="user_type">
+                <option value="passenger">Пассажир</option>
+                <option value="driver">Водитель</option>
+            </select>
+            <button type="submit">Зарегистрироваться</button>
         </form>
-        <div class="login-link">
-            Уже есть аккаунт? <a href="login.php">Войти</a>
-        </div>
+        <div class="link"><a href="login.php">Уже есть аккаунт? Войти</a></div>
     </div>
 </div>
-<script>
-function updateTime() {
-    const now = new Date();
-    document.getElementById('currentTime').textContent = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-}
-setInterval(updateTime, 1000);
-updateTime();
-</script>
 </body>
 </html>

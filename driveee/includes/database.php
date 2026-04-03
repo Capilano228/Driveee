@@ -32,7 +32,7 @@ class Database {
                 $stmt = $this->pdo->prepare("INSERT INTO passengers (user_id) VALUES (?)");
                 $stmt->execute([$userId]);
             } else {
-                $stmt = $this->pdo->prepare("INSERT INTO drivers (user_id, loyalty_points) VALUES (?, 0)");
+                $stmt = $this->pdo->prepare("INSERT INTO drivers (user_id) VALUES (?)");
                 $stmt->execute([$userId]);
             }
             $this->pdo->commit();
@@ -60,38 +60,31 @@ class Database {
         return $stmt->execute([$userId]);
     }
     
+    public function usePriorityRide($userId) {
+        $stmt = $this->pdo->prepare("UPDATE passengers SET priority_rides = priority_rides - 1 WHERE user_id = ? AND priority_rides > 0");
+        return $stmt->execute([$userId]);
+    }
+    
     public function setDriverOnline($driverId, $isOnline) {
         $stmt = $this->pdo->prepare("UPDATE drivers SET is_online = ? WHERE user_id = ?");
         return $stmt->execute([$isOnline, $driverId]);
     }
     
+    public function getOnlineDrivers() {
+        $stmt = $this->pdo->prepare("SELECT d.*, u.full_name, u.phone FROM drivers d JOIN users u ON d.user_id = u.id WHERE d.is_online = 1");
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+    
     public function addLoyaltyPoints($driverId, $points, $orderId, $type) {
-        $this->pdo->beginTransaction();
-        try {
-            $stmt = $this->pdo->prepare("UPDATE drivers SET loyalty_points = loyalty_points + ? WHERE user_id = ?");
-            $stmt->execute([$points, $driverId]);
-            $stmt = $this->pdo->prepare("INSERT INTO loyalty_transactions (driver_id, order_id, points, transaction_type) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$driverId, $orderId, $points, $type]);
-            $this->pdo->commit();
-            return true;
-        } catch (Exception $e) {
-            $this->pdo->rollBack();
-            return false;
-        }
+        $stmt = $this->pdo->prepare("UPDATE drivers SET loyalty_points = loyalty_points + ? WHERE user_id = ?");
+        return $stmt->execute([$points, $driverId]);
     }
     
     public function createOrder($passengerId, $pickupAddress, $pickupLat, $pickupLng, $dropoffAddress, $dropoffLat, $dropoffLng, $rideType, $offeredPrice, $isPriority) {
-        try {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO orders (passenger_id, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, ride_type, offered_price, is_priority, status, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
-            ");
-            $stmt->execute([$passengerId, $pickupAddress, $pickupLat, $pickupLng, $dropoffAddress, $dropoffLat, $dropoffLng, $rideType, $offeredPrice, $isPriority ? 1 : 0]);
-            return $this->pdo->lastInsertId();
-        } catch (PDOException $e) {
-            error_log("createOrder error: " . $e->getMessage());
-            return false;
-        }
+        $stmt = $this->pdo->prepare("INSERT INTO orders (passenger_id, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, ride_type, offered_price, is_priority, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+        $stmt->execute([$passengerId, $pickupAddress, $pickupLat, $pickupLng, $dropoffAddress, $dropoffLat, $dropoffLng, $rideType, $offeredPrice, $isPriority ? 1 : 0]);
+        return $this->pdo->lastInsertId();
     }
     
     public function assignDriverToOrder($orderId, $driverId, $finalPrice) {
@@ -105,28 +98,16 @@ class Database {
     }
     
     public function getPendingOrders() {
-        $stmt = $this->pdo->prepare("
-            SELECT o.*, u.full_name as passenger_name, u.phone as passenger_phone 
-            FROM orders o 
-            JOIN users u ON o.passenger_id = u.id 
-            WHERE o.status = 'pending' 
-            ORDER BY o.is_priority DESC, o.created_at ASC
-        ");
+        $stmt = $this->pdo->prepare("SELECT o.*, u.full_name as passenger_name, u.phone as passenger_phone FROM orders o JOIN users u ON o.passenger_id = u.id WHERE o.status = 'pending' ORDER BY o.is_priority DESC, o.created_at ASC");
         $stmt->execute();
         return $stmt->fetchAll();
     }
     
     public function getDriverOrders($driverId) {
-    $stmt = $this->pdo->prepare("
-        SELECT o.*, u.full_name as passenger_name, u.phone as passenger_phone 
-        FROM orders o 
-        JOIN users u ON o.passenger_id = u.id 
-        WHERE o.driver_id = ? AND o.status IN ('accepted', 'arrived', 'waiting_exit', 'passenger_onboard') 
-        ORDER BY o.created_at DESC
-    ");
-    $stmt->execute([$driverId]);
-    return $stmt->fetchAll();
-}
+        $stmt = $this->pdo->prepare("SELECT o.*, u.full_name as passenger_name, u.phone as passenger_phone FROM orders o JOIN users u ON o.passenger_id = u.id WHERE o.driver_id = ? AND o.status IN ('accepted', 'arrived', 'waiting_exit', 'passenger_onboard')");
+        $stmt->execute([$driverId]);
+        return $stmt->fetchAll();
+    }
     
     public function getOrder($orderId) {
         $stmt = $this->pdo->prepare("SELECT * FROM orders WHERE id = ?");
@@ -136,16 +117,7 @@ class Database {
     
     public function getActiveQuests($userId) {
         $currentWeek = date('W');
-        $stmt = $this->pdo->prepare("
-            SELECT q.*, COALESCE(uq.progress, 0) as progress, 
-            CASE WHEN uq.completed_at IS NOT NULL THEN 1 
-                 WHEN COALESCE(uq.progress, 0) >= q.requirement_value THEN 2 
-                 ELSE 0 END as status 
-            FROM quests q 
-            LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ? AND uq.week_number = ? 
-            WHERE q.is_active = 1 
-            ORDER BY q.id ASC
-        ");
+        $stmt = $this->pdo->prepare("SELECT q.*, COALESCE(uq.progress, 0) as progress FROM quests q LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ? AND uq.week_number = ? WHERE q.is_active = 1");
         $stmt->execute([$userId, $currentWeek]);
         return $stmt->fetchAll();
     }
@@ -153,43 +125,30 @@ class Database {
     public function updateStreak($passengerId, $wasOnTime) {
         $stmt = $this->pdo->prepare("SELECT streak FROM passengers WHERE user_id = ?");
         $stmt->execute([$passengerId]);
-        $currentStreak = $stmt->fetchColumn();
-        
-        if ($wasOnTime) {
-            $newStreak = ($currentStreak ?: 0) + 1;
-        } else {
-            $newStreak = 0;
-        }
-        
+        $current = $stmt->fetchColumn();
+        $newStreak = $wasOnTime ? ($current + 1) : 0;
         $stmt = $this->pdo->prepare("UPDATE passengers SET streak = ?, total_rides = total_rides + 1 WHERE user_id = ?");
         $stmt->execute([$newStreak, $passengerId]);
-        
         return $newStreak;
     }
-    public function updateDriverLocation($driverId, $lat, $lng) {
-    $stmt = $this->pdo->prepare("UPDATE drivers SET last_lat = ?, last_lng = ?, last_location_update = NOW() WHERE user_id = ?");
-    return $stmt->execute([$lat, $lng, $driverId]);
-}
-
-public function updateQuestProgress($passengerId, $orderId) {
-    $currentWeek = date('W');
-    // Обновляем прогресс квестов
-    $stmt = $this->pdo->prepare("
-        INSERT INTO user_quests (user_id, quest_id, progress, week_number) 
-        SELECT ?, q.id, 1, ? FROM quests q WHERE q.requirement_type = 'rides_count' 
-        ON DUPLICATE KEY UPDATE progress = progress + 1
-    ");
-    $stmt->execute([$passengerId, $currentWeek]);
     
-    // Квест "Популярный пассажир"
-    $stmt = $this->pdo->prepare("
-        INSERT INTO user_quests (user_id, quest_id, progress, week_number) 
-        SELECT ?, q.id, 1, ? FROM quests q WHERE q.requirement_type = 'driver_accept' 
-        ON DUPLICATE KEY UPDATE progress = progress + 1
-    ");
-    $stmt->execute([$passengerId, $currentWeek]);
-}
+    public function updateQuestProgress($passengerId) {
+        $week = date('W');
+        $stmt = $this->pdo->prepare("INSERT INTO user_quests (user_id, quest_id, progress, week_number) SELECT ?, q.id, 1, ? FROM quests q WHERE q.requirement_type = 'rides_count' ON DUPLICATE KEY UPDATE progress = progress + 1");
+        $stmt->execute([$passengerId, $week]);
+        $stmt = $this->pdo->prepare("INSERT INTO user_quests (user_id, quest_id, progress, week_number) SELECT ?, q.id, 1, ? FROM quests q WHERE q.requirement_type = 'driver_accept' ON DUPLICATE KEY UPDATE progress = progress + 1");
+        $stmt->execute([$passengerId, $week]);
+    }
     
+    public function addDriverReview($driverId, $passengerId, $rating, $review) {
+        $stmt = $this->pdo->prepare("INSERT INTO reviews (driver_id, passenger_id, rating, review) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$driverId, $passengerId, $rating, $review]);
+        $stmt = $this->pdo->prepare("SELECT AVG(rating) as avg FROM reviews WHERE driver_id = ?");
+        $stmt->execute([$driverId]);
+        $avg = $stmt->fetch();
+        $newRating = round($avg['avg'], 1);
+        $stmt = $this->pdo->prepare("UPDATE drivers SET rating = ? WHERE user_id = ?");
+        $stmt->execute([$newRating, $driverId]);
+    }
 }
-
 ?>
